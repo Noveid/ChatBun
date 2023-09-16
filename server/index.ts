@@ -1,34 +1,45 @@
+const messages = []
+
 const server = Bun.serve<{ username: string }>({
     fetch(req, server) {
         const url = new URL(req.url);
         if (url.pathname === "/chat") {
             console.log(`upgrade!`);
             const username = url.searchParams.get("username");
-            const success = server.upgrade(req, { data: { username } });
+            const success = server.upgrade(req, {data: {username}});
             return success
                 ? undefined
-                : new Response("WebSocket upgrade error", { status: 400 });
+                : new Response("WebSocket upgrade error", {status: 400});
         }
 
         return new Response(url.pathname);
     },
     websocket: {
         open(ws) {
-            const msg = `${ws.data.username} has entered the chat`;
-            ws.subscribe("the-group-chat");
-            ws.publish("the-group-chat", msg);
+            const msg = {sender: "bot", text: `${ws.data.username} has entered the chat`};
+            messages.push(msg)
+            const messageToWeb = {event: "chatMessages", payload: messages}
+            ws.send(JSON.stringify(messageToWeb));
+            ws.subscribe("chatMessages");
+            ws.publishText("chatMessages", JSON.stringify(messageToWeb))
         },
-        message(ws, message) {
-            console.log(message.toString());
-            console.log(message);
-            // this is a group chat
-            // so the server re-broadcasts incoming message to everyone
-            ws.publish("the-group-chat", `${ws.data.username}: ${message}`);
+        message(ws, mess) {
+            const message = JSON.parse(mess as string)
+
+            if (message["event"] === "chat") {
+                const messageToChat = {sender: message.username ?? "error", text: message.messageText ?? "error"}
+                console.log("chat", messageToChat);
+                messages.push(messageToChat)
+                const messageToWeb = {event: "chatMessages", payload: messages}
+                ws.send(JSON.stringify(messageToWeb));
+                ws.publishText("chatMessages", JSON.stringify(messageToWeb))
+            }
         },
         close(ws) {
-            const msg = `${ws.data.username} has left the chat`;
-            ws.unsubscribe("the-group-chat");
-            ws.publish("the-group-chat", msg);
+            ws.unsubscribe("chatMessages");
+            const msg = {sender: "bot", text: `${ws.data.username} has left the chat`};
+            messages.push(msg)
+            ws.publishText("chatMessages", JSON.stringify(messages));
         },
     },
 });
