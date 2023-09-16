@@ -1,0 +1,14 @@
+{
+  "name": "chatbun",
+  "module": "start.ts",
+  "type": "module",
+  "scripts": {
+    "dev": "bun --hot start.ts"
+  },
+  "devDependencies": {
+    "bun-types": "latest"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  }
+}
