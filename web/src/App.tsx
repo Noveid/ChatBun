@@ -1,16 +1,23 @@
 import {useEffect, useRef, useState} from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from '/vite.svg'
 import './App.css'
+
+type Message = { sender: string, text: string }
 
 function App() {
     const [count, setCount] = useState(0)
+    const [messages, setMessages] = useState<Message[]>([])
+    const [username, setUsername] = useState("")
+    const [usernameInput, setUsernameInput] = useState("")
+    const [messageText, setMessageText] = useState("go")
     const [isConnected, setIsConnected] = useState(false)
     const socket = useRef<WebSocket>()
 
     useEffect(() => {
+        if (!username) {
+            return
+        }
         // @ts-ignore
-        socket.current = new WebSocket(`ws://localhost:3000/chat`)
+        socket.current = new WebSocket(`ws://192.168.0.165:3000/chat?username=${username}`)
 
         const ws = socket.current as WebSocket
 
@@ -19,7 +26,7 @@ function App() {
             setIsConnected(true)
             const message = {
                 event: "connection",
-                username: "lol",
+                username,
                 id: Date.now()
             }
             ws.send(JSON.stringify(message))
@@ -27,6 +34,10 @@ function App() {
 
         ws.onmessage = (ev) => {
             console.log("onmessage", ev)
+            const {event, payload} = JSON.parse(ev.data) as { event: string, payload: Message[] }
+            if (event === "chatMessages") {
+                setMessages(payload)
+            }
         }
 
         ws.onclose = (ev) => {
@@ -36,30 +47,51 @@ function App() {
         ws.onerror = (ev) => {
             console.log("onerror", ev)
         }
-    }, [])
+
+        return () => {
+            ws.close()
+        }
+    }, [username])
+
+    const changeName = () => {
+        setUsername(usernameInput)
+    }
+
+    const sendMessage = () => {
+        if ("send" in socket.current) {
+            const message = {
+                event: "chat",
+                username,
+                messageText
+            }
+            socket.current.send(JSON.stringify(message))
+            setMessageText("")
+        }
+    }
 
     return (
         <>
             <div>
-                <a href="https://vitejs.dev" target="_blank">
-                    <img src={viteLogo} className="logo" alt="Vite logo"/>
-                </a>
-                <a href="https://react.dev" target="_blank">
-                    <img src={reactLogo} className="logo react" alt="React logo"/>
-                </a>
+                <span>Your nickname: </span>
+                <input type="text" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)}/>
+                <button onClick={changeName}>{username ? "change name" :"set your name"}</button>
             </div>
-            <h1>Vite + React</h1>
-            <div className="card">
-                <button onClick={() => setCount((count) => count + 1)}>
-                    count is {count}
-                </button>
-                <p>
-                    Edit <code>src/App.tsx</code> and save to test HMR
-                </p>
+            <br/>
+            <div style={{marginBottom:"10px"}}>
+                <span>Your message: </span>
+                <input type="text" value={messageText} onChange={(e) => setMessageText(e.target.value)}/>
             </div>
-            <p className="read-the-docs">
-                Click on the Vite and React logos to learn more
-            </p>
+            <div>
+                <button onClick={sendMessage}>Send message</button>
+            </div>
+            <br/>
+            {messages.length > 0 ? <div>
+                {messages.map(message => {
+                    return <div>
+                        <div>{`${message.sender}: `} {message.text}</div>
+                    </div>
+                })}
+            </div> : username ? "No messages" : "Pls login"}
         </>
     )
 }
